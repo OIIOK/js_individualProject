@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>다람쥐 점프</title>
+</head>
+    <style>
+        body {
+            margin: 0px;
+            position: relative;
+            display: flex;
+            /* 하위 요소를 한번에 정리하기 위해 사용 */
+            justify-content: center;
+            /* 수평 정렬하기 위해 사용 */
+        }
+
+        #wrapper {
+            width: 1600px;
+            /* 63층*55 */
+            height: 3740px;
+            background-image: url(../images/squirrel/map\(start\).png);
+            background-size: cover;
+            position: relative;
+            overflow: hidden;
+            box-sizing: border-box;
+            /* 크기를 고정하기 위해 사용 */
+            z-index: 3;
+            /* 다른 요소를 덮기 위해 사용 */
+        }
+
+        #info {
+            width: 170px;
+            height: 100%;
+            background-color: rgb(0, 0, 0);
+            float: left;
+            position: relative;
+            display: none;
+            /* 시작 화면에서 보이지 않기 위해 지정해줌 */
+
+        }
+
+        #bt_retry {
+            position: absolute;
+            margin-left: 50px;
+            width: 70px;
+            height: 30px;
+            top: 78%;
+            background-color: white;
+            border: 2px solid green;
+            font-weight: bold;
+            border-radius: 10px;
+        }
+
+        #stage {
+            /* 13호*110 */
+            width: 1430px;
+            height: 100%;
+            background-image: url(../images/squirrel/map\(forest\).png);
+            background-size: cover;
+            float: left;
+            position: relative;
+            /* 자식요소 붙잡기 위해 */
+            display: none;
+            /* 시작 화면에서 보이지 않기 위해 지정해줌 */
+        }
+    </style>
+
+<script src="classes/GameObject.js"></script>
+<script src="./classes/MapContainer.js"></script>
+<script src="./classes/map.js"></script>
+    <script src="./classes/Info.js"></script>
+    <script src="./classes/Block.js"></script>
+    <script src="./classes/Squirrel.js"></script>
+    <script src="./classes/Sensor.js"></script>
+    <script src="./classes/LeftSensor.js"></script>
+    <script src="./classes/RightSensor.js"></script>
+    <script src="./classes/UpSensor.js"></script>
+    <script src="./classes/DownSensor.js"></script>
+    <script src="../lib/util.js"></script>
+    <script>
+        let stage;
+        let mapContainer;
+        let info;
+        let printinfo;
+        let blockWidth = 110;
+        let blockHeight = 55;
+        let heroSize = 95;
+        let squirrel;
+        let gameFlag = false;
+        let sensorArray = new Array(4);// 센서역할을 수행할 네 영역의 바를 담을 배열
+        let standArray = [];
+        let itemArray = [[], [], []]; // 0: 사과, 1:똥, 2: 도토리
+        // let appleArray = [];
+        // let poopArray = [];
+        // let acornArray = [];
+        let score = 0;
+
+        //액션 종류 
+        const STAND = 0;
+        const WALK = 1;
+        const JUMP = 2;
+        const FALL = 3;
+        let actionState = true;
+
+
+        //맵컨테이너 생성하기 
+        function createMapContainer() {
+            //constructor(container, src, x, y, width, height, velX, velY)
+            mapContainer = new MapContainer(stage, "", 0, 0, map[0].length * blockWidth, map.length * blockHeight, 0, 1.5);
+        }
+
+
+        //맵 생성하기
+        function createMap() {
+            for (let j = 0; j < map.length; j++) {
+                for (let i = 0; i < map[j].length; i++) {
+                    let block;
+                    if (map[j][i] == 1) {
+                        //constructor(container, src, x, y, width, height, velX, velY)
+                        block = new Block(mapContainer.div, "../images/squirrel/map(grass1).png", (i * blockWidth), (j * blockHeight), blockWidth, blockHeight, 0, 0);
+                        standArray.push(block);
+                    } else if (map[j][i] == 6) {
+                        block = new Block(mapContainer.div, "../images/squirrel/map(grass2).png", (i * blockWidth), (j * blockHeight), blockWidth, blockHeight, 0, 0);
+                        standArray.push(block);
+                    } else if (map[j][i] == 2) {
+                        block = new Block(mapContainer.div, "../images/squirrel/map(rope).png", (i * blockWidth), (j * blockHeight), blockWidth, blockHeight, 0, 0);
+                        standArray.push(block);
+                    } else if (map[j][i] == 3) {
+                        block = new Block(mapContainer.div, "../images/squirrel/item(apple).png", (i * blockWidth), (j * blockHeight), blockWidth, blockHeight, 0, 0);
+                        itemArray[0].push(block);
+                    } else if (map[j][i] == 4) {
+                        block = new Block(mapContainer.div, "../images/squirrel/item(poop).png", (i * blockWidth), (j * blockHeight), blockWidth, blockHeight, 0, 0);
+                        itemArray[1].push(block);
+                    } else if (map[j][i] == 5) {
+                        block = new Block(mapContainer.div, "../images/squirrel/item(acorn).png", (i * blockWidth), (j * blockHeight), blockWidth, blockHeight, 0, 0);
+                        itemArray[2].push(block); //개발자모드에서 각 배열 생성 확인하기
+                    }
+                }
+            }
+        }
+
+
+        //게임 정보 출력하기
+        function printLog() {
+            let str = "넓이 width: " + squirrel.width + "\n";
+            str += "높이 height: " + squirrel.height + "\n";
+            str += "위치 y: " + squirrel.y + "\n";
+            str += "이동 velY: " + squirrel.velY + "\n";
+            str += "중력 g: " + squirrel.g + "\n";
+            str += "점프 fall: " + squirrel.fall + "\n";
+            str += "아이템 충돌: " + squirrel.touch + "\n";
+            str += "점수: " + score + "\n";
+            info_area.innerText = str;
+        }
+
+
+        //게임 정보창 생성하기
+        function printInfo() {
+            printinfo = new Info(mapContainer.div, -150, 0, 100, 100, 55);
+        }
+
+
+        //주인공 생성하기
+        function createHero() {
+            //constructor(container, src, x, y, width, height, velX, velY)
+            squirrel = new Squirrel(mapContainer.div, "../images/squirrel/squirrel.png", (blockWidth), (53 * blockHeight), heroSize, heroSize, 0, 5); //전역변수화
+            squirrel.action();
+        }
+
+
+        function startAction(type) {
+            squirrel.actionType = type;
+            squirrel.actionFlag = true;
+        }
+
+        //주인공 움직이기
+        function moveX(n) {
+            startAction(WALK);
+
+            squirrel.velX = n;
+            //방향 전환하기 
+            if (n != 0) {   //0 = 멈춰있을 때는 실행되지 않도록 
+                let direct = (n > 0) ? 1 : -1; //마이너스 = 왼쪽으로 이동할 때
+                squirrel.div.style.transform = "scaleX(" + (direct) + ")";
+                actionState = false;
+            } else {
+                actionState = true;
+                startAction(STAND);
+            }
+        }
+
+
+        //주인공 점프하기
+        function jump() {
+            startAction(JUMP);
+            if (squirrel.velY <= 0 && squirrel.fall) { //블럭에 닿았거나 점프하지 않 을 때만 점프 가능
+                squirrel.fall = false;    //jump 할때는 false, 안 할때는 true
+                squirrel.velY = -12.5;
+            } else {
+                actionState = false;
+            }
+
+
+        }
+
+
+        //센서 생성하기
+        function createSensor() {
+            // constructor(container, src, x, y, width, height, velX, velY)
+            sensorArray[0] = new UpSensor(mapContainer.div, "", squirrel.x, squirrel.y, squirrel.width - 16, 2);//상 
+            sensorArray[1] = new DownSensor(mapContainer.div, "", squirrel.x, squirrel.y + squirrel.height, squirrel.width - 16, 2);//하 
+            sensorArray[2] = new LeftSensor(mapContainer.div, "", squirrel.x, squirrel.y, 2, squirrel.height - 8);//좌
+            sensorArray[3] = new RightSensor(mapContainer.div, "", squirrel.x + squirrel.width, squirrel.y, 2, squirrel.height - 8);//우
+        }
+
+
+
+
+        //자동화하기
+        function gameLoop() {
+            if (gameFlag) {   //게임 정지하기
+                //주인공 움직임 관련
+                squirrel.tick();
+                squirrel.render();
+                if (actionState) { //actionState로 actionFlag을 제어하자
+                    squirrel.actionFlag = true;
+                }
+
+                //센서들 각각 움직임 관련
+                for (let i = 0; i < sensorArray.length; i++) {
+                    sensorArray[i].tick();
+                    sensorArray[i].render();
+                }
+
+                mapContainer.tick();
+                mapContainer.render();
+            }
+
+            //printLog(); //게임 정보 출력하기
+            printinfo.tick(squirrel.y);
+            printinfo.render();
+            printinfo.textUpdate();
+
+            setTimeout("gameLoop()", 10);
+        }
+
+
+        //초기화하기
+        function init() {
+            stage = document.getElementById("stage"); //전역변수화
+            info = document.getElementById("info");    //전역변수화
+
+            //맵 컨테이너 생성 
+            createMapContainer();
+
+            //맵 생성하기
+            createMap();
+
+            //정보창 생성하기
+            printInfo();
+
+            //주인공 생성하기
+            createHero();
+
+            //센서생성
+            createSensor();
+
+            //주인공 가로로 움직이기
+            document.addEventListener("keydown", function (e) {   //이벤트값 매개변수로 가져오기
+                //console.log(event.keyCode);   //로 키값 확인
+                //37:<, 39:>, 32: spacebar, 27:esc
+                switch (e.keyCode) {
+                    case 37: moveX(-3); break;
+                    case 39: moveX(3); break;
+                    case 32: jump(); break;
+                    case 27: gameFlag = !gameFlag;
+                }
+            });
+            document.addEventListener("keyup", function (e) {
+                switch (e.keyCode) {
+                    case 37: moveX(0); break;
+                    case 39: moveX(0); break;
+                    case 13: gameFlag = true;
+                        document.getElementById("stage").style.display = "block";
+                        document.getElementById("info").style.display = "block";
+                        break;
+                }
+            });
+            gameLoop();
+
+            //재도전하기
+            document.getElementById("bt_retry").addEventListener("click", function () {
+                document.location.reload();
+            })
+        }
+
+        window.addEventListener("load", function () {
+            init();
+
+        })
+    </script>
+
+
+<body>
+    <div id="wrapper">
+        <div id="info">
+            <button id="bt_retry">재도전</button>
+        </div>
+        <div id="stage"></div>
+    </div>
+</body>
+
+</html>
